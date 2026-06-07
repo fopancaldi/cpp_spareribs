@@ -1,0 +1,9 @@
+# TODO: Possibly use compile_commands.json to avoid requiring that the build directory is named "build"
+
+CompileFlags:
+  Add: [
+    --language=cuda,
+    --std=c++20,
+    --include-directory=include/,
+  --include-directory=build/_deps/doctest-src/
+  ]
