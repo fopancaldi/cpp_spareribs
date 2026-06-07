@@ -77,17 +77,19 @@ class IndependentEvMap {
 template <typename TEvMap1, typename TEvMap2, std::floating_point F>
     requires requires(TEvMap1 em1, TEvMap2 em2, F f, F* p, F const* cp, std::size_t s) {
         { em1.evolve_in_place(p, p, f, s) } -> std::same_as<void>;
-        { em1.evolve_out_of_place(p, p, cp, cp, f, s) } -> std::same_as<void>;
+        { em1.evolve_out_of_place(cp, cp, p, p, f, s) } -> std::same_as<void>;
         { em2.evolve_in_place(p, p, f, s) } -> std::same_as<void>;
-        { em2.evolve_out_of_place(p, p, cp, cp, f, s) } -> std::same_as<void>;
+        { em2.evolve_out_of_place(cp, cp, p, p, f, s) } -> std::same_as<void>;
     }
 class RibsCompositionEvMap {
     TEvMap1 ev_map_1_;
     TEvMap2 ev_map_2_;
 
   public:
-    RibsCompositionEvMap(TEvMap1&& ev_map_1, TEvMap2&& ev_map_2, F)
-        : ev_map_1_{ev_map_1_}, ev_map_2_{ev_map_2_} {}
+    RibsCompositionEvMap(TEvMap1 ev_map_1, TEvMap2 ev_map_2, F)
+        : ev_map_1_{ev_map_1}, ev_map_2_{ev_map_2} {}
+    TEvMap1& ev_map_1() { return ev_map_1_; }
+    TEvMap2& ev_map_2() { return ev_map_2_; }
     void evolve_in_place(F* first, F* second, F step, std::size_t len) {
         ev_map_1_.evolve_in_place(first, second, step / F{2}, len);
         ev_map_2_.evolve_in_place(first, second, step, len);
@@ -148,6 +150,12 @@ class GaussianJumpEvMap {
         assert(s == CURAND_STATUS_SUCCESS);
         assert(len_ % 2 == 0);
     }
+    GaussianJumpEvMap(GaussianJumpEvMap const& other)
+        : GaussianJumpEvMap(other.temperature_, other.len_, 0, other.block_threads_) {
+        cudaMemcpy(random_vals_, other.random_vals_, len_ * sizeof(int), cudaMemcpyHostToDevice);
+    }
+    GaussianJumpEvMap(GaussianJumpEvMap&& other) = delete;
+
     void evolve_in_place(F* first, F*, F, std::size_t len) {
         assert(len == len_);
         // TODO: Extend to F == double (requires using curandGenerateNormalDouble!)
