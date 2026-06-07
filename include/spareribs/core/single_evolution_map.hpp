@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spareribs/core/vec2.hpp"
+#include "spareribs/internal/vec2.hpp"
 
 #include <cassert>
 #include <concepts>

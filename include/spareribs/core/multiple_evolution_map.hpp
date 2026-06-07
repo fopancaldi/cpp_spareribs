@@ -1,7 +1,7 @@
 #pragma once
 
-#include "spareribs/core/util.hpp"
-#include "spareribs/core/vec2.hpp"
+#include "spareribs/internal/div_ceil.hpp"
+#include "spareribs/internal/vec2.hpp"
 
 #include <cassert>
 #include <cmath>
