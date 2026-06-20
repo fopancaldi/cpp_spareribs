@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spareribs/internal/curand_generate.hpp"
 #include "spareribs/internal/div_ceil.hpp"
 #include "spareribs/internal/vec2.hpp"
 
@@ -158,10 +159,8 @@ class GaussianJumpEvMap {
 
     void evolve_in_place(F* first, F*, F, std::size_t len) {
         assert(len == len_);
-        // TODO: Extend to F == double (requires using curandGenerateNormalDouble!)
-        static_assert(std::is_same_v<F, float>);
-        curandStatus_t const s = curandGenerateNormal(generator_, random_vals_, len_, F{0},
-                                                      std::sqrt(F{2} * temperature_));
+        curandStatus_t const s =
+            generate_normal(generator_, random_vals_, len_, F{0}, std::sqrt(F{2} * temperature_));
         assert(s == CURAND_STATUS_SUCCESS);
         const unsigned int grid_blocks = div_ceil(len, block_threads_);
         detail::gaussian_jump_ev_map::kernel_in_place<<<grid_blocks, block_threads_>>>(random_vals_,
@@ -170,8 +169,8 @@ class GaussianJumpEvMap {
     void evolve_out_of_place(F const* __restrict__ first_in, F const*, F* __restrict__ first_out,
                              F*, F, std::size_t len) {
         assert(len == len_);
-        curandStatus_t const s = curandGenerateNormal(generator_, random_vals_, len_, F{0},
-                                                      std::sqrt(F{2} * temperature_));
+        curandStatus_t const s =
+            generate_normal(generator_, random_vals_, len_, F{0}, std::sqrt(F{2} * temperature_));
         assert(s == CURAND_STATUS_SUCCESS);
         const unsigned int grid_blocks = div_ceil(len, block_threads_);
         detail::gaussian_jump_ev_map::kernel_out_of_place<<<grid_blocks, block_threads_>>>(
