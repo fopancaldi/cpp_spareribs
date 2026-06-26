@@ -11,10 +11,11 @@ class SimulationPack {
     F* u_;
     F* v_;
     std::size_t len_;
+    F time_;
 
   public:
-    SimulationPack() : u_{nullptr}, v_{nullptr}, len_{0} {}
-    SimulationPack(std::size_t len) : u_{nullptr}, v_{nullptr}, len_{len} {
+    SimulationPack() : u_{nullptr}, v_{nullptr}, len_{0}, time_{0} {}
+    SimulationPack(std::size_t len) : u_{nullptr}, v_{nullptr}, len_{len}, time_{0} {
         cudaMalloc(&u_, len * sizeof(F));
         cudaMalloc(&v_, len * sizeof(F));
     }
@@ -52,6 +53,8 @@ class SimulationPack {
     F const* u() const { return u_; }
     F const* v() const { return v_; }
     std::size_t len() const { return len_; }
+    F& time() { return time_; }
+    F time() const { return time_; }
 
     friend void swap(SimulationPack& lhs, SimulationPack& rhs) {
         std::swap(lhs.u_, rhs.u_);
