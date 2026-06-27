@@ -19,8 +19,8 @@ int main() {
     using float_type = float;
 
     constexpr std::size_t simulations = 2, generator_seed = 0;
-    constexpr unsigned int block_threads = 1 << 10, total_steps = 100;
-    constexpr float_type a = 1.3f, epsilon = .001f, T = .001f, step = .1f, threshold = .5f;
+    constexpr unsigned int block_threads = 1 << 10, total_steps = 1000000;
+    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.01f, step_size = 0.1f;
     constexpr std::string_view outDirName = "orbits";
     assert(fs::current_path().filename() == "cpp_spareribs");
 
@@ -41,9 +41,12 @@ int main() {
     GaussianJumpEvMap gj_em(T, sim_pack.len(), generator_seed, block_threads);
     RibsCompositionEvMap evolution_map(ind_em, gj_em, float_type{});
 
-    for (unsigned int i = 0; i < total_steps; ++i) {
-        evolution_map.evolve_in_place(sim_pack.u(), sim_pack.v(), step, sim_pack.len());
+    for (unsigned int steps = 0; steps < total_steps; ++steps) {
+        evolution_map.evolve_in_place(sim_pack.u(), sim_pack.v(), step_size, sim_pack.len());
         orbit_tr.fill_new(sim_pack);
+        if (20 * steps % total_steps == 0) {
+            std::cout << "steps / total_steps: " << steps << " / " << total_steps << '\n';
+        }
     }
 
     fs::path const outDirPath = fs::current_path() / outDirName;

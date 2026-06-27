@@ -108,7 +108,8 @@ class RibsCompositionEvMap {
 namespace detail::gaussian_jump_ev_map {
 
 template <std::floating_point F>
-static __global__ void kernel_in_place(F const* __restrict__ random_vals, F* arr, std::size_t len) {
+static __global__ void kernel_in_place(F const* __restrict__ random_vals, F* __restrict__ arr,
+                                       std::size_t len) {
     assert(threadIdx.y == 0u and threadIdx.z == 0u);
     assert(blockIdx.y == 0u and blockIdx.z == 0u);
     const unsigned int g_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -157,20 +158,20 @@ class GaussianJumpEvMap {
     }
     GaussianJumpEvMap(GaussianJumpEvMap&& other) = delete;
 
-    void evolve_in_place(F* first, F*, F, std::size_t len) {
+    void evolve_in_place(F* first, F*, F step, std::size_t len) {
         assert(len == len_);
-        curandStatus_t const s =
-            generate_normal(generator_, random_vals_, len_, F{0}, std::sqrt(F{2} * temperature_));
+        curandStatus_t const s = generate_normal(generator_, random_vals_, len_, F{0},
+                                                 std::sqrt(F{2} * temperature_ * step));
         assert(s == CURAND_STATUS_SUCCESS);
         const unsigned int grid_blocks = div_ceil(len, block_threads_);
         detail::gaussian_jump_ev_map::kernel_in_place<<<grid_blocks, block_threads_>>>(random_vals_,
                                                                                        first, len_);
     }
     void evolve_out_of_place(F const* __restrict__ first_in, F const*, F* __restrict__ first_out,
-                             F*, F, std::size_t len) {
+                             F*, F step, std::size_t len) {
         assert(len == len_);
-        curandStatus_t const s =
-            generate_normal(generator_, random_vals_, len_, F{0}, std::sqrt(F{2} * temperature_));
+        curandStatus_t const s = generate_normal(generator_, random_vals_, len_, F{0},
+                                                 std::sqrt(F{2} * temperature_ * step));
         assert(s == CURAND_STATUS_SUCCESS);
         const unsigned int grid_blocks = div_ceil(len, block_threads_);
         detail::gaussian_jump_ev_map::kernel_out_of_place<<<grid_blocks, block_threads_>>>(

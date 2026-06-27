@@ -11,26 +11,7 @@
 #include <iterator>
 #include <ranges>
 #include <string_view>
-#include <type_traits>
 #include <vector>
-
-/* template <typename T>
-    requires std::is_fundamental_v<T>
-__global__ void print_kernel(T* ptr, std::size_t length, char c) {
-    assert(threadIdx.x + threadIdx.y + threadIdx.z == 0);
-    assert(blockIdx.x + blockIdx.y + blockIdx.z == 0);
-    for (std::size_t i = 0; i < length; ++i) {
-        printf("%c[%u]: %f\n", c, static_cast<unsigned int>(i), ptr[i]);
-    }
-}
-
-template <std::floating_point F>
-struct FakeFunction {
-    __host__ __device__ spareribs::Vec2<F> operator()(spareribs::Vec2<F> vec) const {
-        const auto [u, v] = vec;
-        return {u, 0};
-    }
-}; */
 
 int main() {
     namespace fs = std::filesystem;
@@ -38,9 +19,10 @@ int main() {
     using float_type = float;
 
     constexpr std::size_t simulations = 2, generator_seed = 0;
-    constexpr unsigned int block_threads = 1 << 10, steps_until_check = 1000;
-    constexpr float_type a = 1.3f, epsilon = .001f, T = .001f, step_size = .1f, threshold = .5f;
-    constexpr float_type target_avg_spikes = 1;
+    constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000000;
+    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.01f, step_size = 0.1f,
+                         spike_threshold = 0.f, min_spike_delay = 0.f;
+    constexpr float_type target_avg_spikes = 1000;
     constexpr std::string_view outDirName = "spike_intervals";
 
     SimulationPack<float_type> sim_pack1(simulations), sim_pack2(simulations);
@@ -53,32 +35,26 @@ int main() {
     const std::vector v_0_vec(sim_pack1.len(), v_0);
     cudaMemcpy(sim_pack1.v(), v_0_vec.data(), sim_pack1.len() * sizeof(float_type),
                cudaMemcpyHostToDevice);
-    /* const std::vector<float_type> u_0_vec(sim_pack1.len(), 0.3f);
-    const std::vector<float_type> v_0_vec(sim_pack1.len(), 1);
-    cudaMemcpy(sim_pack1.u(), u_0_vec.data(), sim_pack1.len() * sizeof(float_type),
-               cudaMemcpyHostToDevice); */
-    cudaMemcpy(sim_pack1.v(), v_0_vec.data(), sim_pack1.len() * sizeof(float_type),
-               cudaMemcpyHostToDevice);
+    sim_pack1.time() = 0.f;
+    sim_pack2.time() = 0.f;
 
-    Rk4EvMap rk4_em(FhnNeuron{epsilon, a} /* FakeFunction<float_type>{} */, float_type{});
+    Rk4EvMap rk4_em(FhnNeuron{epsilon, a}, float_type{});
     IndependentEvMap ind_em(rk4_em, block_threads, float_type{});
     GaussianJumpEvMap gj_em(T, sim_pack1.len(), generator_seed, block_threads);
     RibsCompositionEvMap evolution_map(ind_em, gj_em, float_type{});
-    SpikeTracker<float_type> spike_tr(sim_pack1.len(), target_avg_spikes, threshold, block_threads);
+    SpikeTracker<float_type> spike_tr(sim_pack1.len(), target_avg_spikes, spike_threshold,
+                                      block_threads);
 
     for (unsigned int steps = 0;; ++steps) {
         SimulationPack<float_type> const& past = steps % 2 == 0 ? sim_pack1 : sim_pack2;
         SimulationPack<float_type>& future = steps % 2 == 0 ? sim_pack2 : sim_pack1;
-        evolution_map /* ind_em */.evolve_out_of_place(past.u(), past.v(), future.u(), future.v(),
-                                                       step_size, sim_pack1.len());
+        evolution_map.evolve_out_of_place(past.u(), past.v(), future.u(), future.v(), step_size,
+                                          sim_pack1.len());
         future.time() = steps * step_size;
         spike_tr.update(future, past);
 
-        /* print_kernel<<<1, 1>>>(future.u(), future.len(), 'u');
-        print_kernel<<<1, 1>>>(future.v(), future.len(), 'v');
-        print_kernel<<<1, 1>>>(spike_tr.spike_times_single_sim(0), 5, 's'); */
-
         if ((steps % steps_until_check) == 0) {
+            cudaDeviceSynchronize();
             float_type const avg_spikes = spike_tr.average_spikes();
             if (avg_spikes >= target_avg_spikes) {
                 break;
@@ -95,17 +71,27 @@ int main() {
     std::vector<std::ofstream> ofstreams{};
     std::ranges::transform(std::views::iota(std::size_t{0}, simulations),
                            std::back_inserter(ofstreams), [outDirPath](std::size_t i) {
-                               return std::ofstream(outDirPath / (std::to_string(i) + ".csv"));
+                               std::ofstream r(outDirPath / (std::to_string(i) + ".csv"));
+                               r << std::scientific << std::setprecision(10);
+                               return r;
                            });
     std::vector<std::size_t> spikes_each_sim(simulations);
     cudaMemcpy(spikes_each_sim.data(), spike_tr.written_elems(), simulations * sizeof(std::size_t),
                cudaMemcpyDeviceToHost);
     for (unsigned int i = 0; i < spikes_each_sim.size(); ++i) {
-        std::vector<std::size_t> spike_times_single_sim(spikes_each_sim[i]);
-        cudaMemcpy(spike_times_single_sim.data(), spike_tr.spike_times_single_sim(i),
-                   spike_times_single_sim.size() * sizeof(std::size_t), cudaMemcpyDeviceToHost);
-        std::ranges::copy(spike_times_single_sim,
-                          std::ostream_iterator<float_type>(ofstreams[i], "\n"));
+        if (spikes_each_sim[i] > 0) {
+            std::vector<float_type> spike_times(spikes_each_sim[i]);
+            cudaMemcpy(spike_times.data(), spike_tr.spike_times_single_sim(i),
+                       spike_times.size() * sizeof(float_type), cudaMemcpyDeviceToHost);
+            ofstreams[i] << spike_times.front() << '\n';
+            for (auto it = spike_times.cbegin() + 1, last_written_it = spike_times.cbegin();
+                 it != spike_times.cend(); ++it) {
+                if (*it - *last_written_it > min_spike_delay) {
+                    ofstreams[i] << *it - *last_written_it << '\n';
+                    last_written_it = it;
+                }
+            }
+        }
     }
 
     cudaDeviceSynchronize();

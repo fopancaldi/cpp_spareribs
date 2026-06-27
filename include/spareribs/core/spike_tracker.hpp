@@ -8,87 +8,35 @@
 #include <cstddef>
 #include <cstdio>
 #include <type_traits>
-#include <vector>
-
-namespace spareribs::old {
-
-/* namespace detail::spike_tracker {
-
-template <std::floating_point F>
-__global__ void update_kernel(int* count, F const* future, F const* past, F threshold,
-                              std::size_t length) {
-    assert(threadIdx.y == 0u and threadIdx.z == 0u);
-    unsigned int const g_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (g_idx < length) {
-        if (future[g_idx] > threshold and past[g_idx] < threshold) {
-            ++count[g_idx];
-        }
-    }
-}
-
-} // namespace detail::spike_tracker
-
-template <std::floating_point F>
-class SpikeTracker {
-    int* count_;
-    std::size_t length_;
-    F threshold_;
-    unsigned int block_threads_;
-
-  public:
-    SpikeTracker(std::size_t length, F threshold, unsigned int block_threads)
-        : count_{nullptr}, length_{length}, threshold_{threshold}, block_threads_{block_threads} {
-        cudaMalloc(&count_, length_ * sizeof(int));
-    }
-    ~SpikeTracker() { cudaFree(count_); }
-
-    int* count() { return count_; }
-    int const* count() const { return count_; }
-    void update(SimulationPack<F> const& future, SimulationPack<F> const& past) const {
-        assert(future.len() == length_);
-        assert(past.len() == length_);
-        unsigned int const grid_blocks = div_ceil(length_, block_threads_);
-        detail::spike_tracker::update_kernel<<<grid_blocks, block_threads_>>>(
-            count_, future.u(), past.u(), threshold_, length_);
-    }
-}; */
-
-} // namespace spareribs::old
 
 namespace spareribs {
 
 namespace detail::spike_tracker {
 
-template <std::floating_point F>
-__device__ F& ptr_at(F* ptr, std::size_t y_idx, std::size_t x_idx, std::size_t x_len) {
+template <typename T>
+__device__ T& ptr_at(T* ptr, std::size_t y_idx, std::size_t x_idx, std::size_t x_len) {
     return ptr[y_idx * x_len + x_idx];
 }
 
 template <std::floating_point F>
 __global__ void update_kernel(F* spike_times, std::size_t* written_elems, F const* u_future,
                               F const* u_past, F current_time, F threshold,
-                              std::size_t simulations) {
+                              std::size_t max_written_elems, std::size_t simulations) {
     assert(threadIdx.y == 0 and threadIdx.z == 0);
     unsigned int const g_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (g_idx == 0) {
-        printf("entering kernel\n");
-        printf("u_future[0]: %f\tu_past[0]: %f\tthreshold: %f\n", u_future[0], u_past[0],
-               threshold);
+        /* printf("entering kernel\n");
+        printf("u_future[0]: %+f\tu_past[0]: %+f\tu_future[1]: %+f\tu_past[1]: %+f\tcurrent_time: "
+               "%f\tthreshold: %f\n",
+               u_future[0], u_past[0], u_future[1], u_past[1], current_time, threshold); */
     }
     if (g_idx < simulations) {
         if (u_future[g_idx] > threshold and u_past[g_idx] < threshold) {
-            printf("updating\n");
             std::size_t const spikes_current_sim = written_elems[g_idx];
-            if (spikes_current_sim == 0) {
-                ptr_at(spike_times, g_idx, spikes_current_sim, simulations) = current_time;
-                printf("current_time: %f\tptr_at: %f\n", current_time,
-                       ptr_at(spike_times, g_idx, spikes_current_sim, simulations));
-            } else {
-                assert(ptr_at(spike_times, g_idx, spikes_current_sim - 1, simulations) > F{0});
-                ptr_at(spike_times, g_idx, spikes_current_sim, simulations) =
-                    current_time - ptr_at(spike_times, g_idx, spikes_current_sim - 1, simulations);
-                ++written_elems[g_idx];
-            }
+            /* printf("updating sim. of index %u\tprevious spikes: %u\n", g_idx,
+                   static_cast<unsigned int>(spikes_current_sim)); */
+            ptr_at(spike_times, g_idx, spikes_current_sim, max_written_elems) = current_time;
+            ++written_elems[g_idx];
         }
     }
 }
@@ -109,18 +57,17 @@ __global__ void reduce_iter_kernel(T const* in, T* out, std::size_t in_length) {
                        g_idx = blockIdx.x * blockDim.x + threadIdx.x;
     extern __shared__ T shared[];
     assert(is_power_of_2(b_dim));
-    if (g_idx < in_length) {
-        shared[t_idx] = in[g_idx];
-    } else {
-        shared[t_idx] = T{0};
-    }
+
+    shared[t_idx] = g_idx < in_length ? in[g_idx] : T{0};
     __syncthreads();
+
     for (unsigned int i = 1; i < b_dim; i *= 2) {
         if (t_idx % (2 * i) == 0) {
             shared[t_idx] += shared[t_idx + i];
         }
         __syncthreads();
     }
+
     out[b_idx] = shared[0];
 }
 
@@ -164,7 +111,7 @@ class SpikeTracker {
           threshold_{threshold}, block_threads_{block_threads} {
         cudaMalloc(&spike_times_, simulations_ * max_written_elems_ * sizeof(F));
         cudaMalloc(&written_elems_, simulations_ * sizeof(std::size_t));
-        cudaMemset(written_elems_, 0x00, simulations_);
+        cudaMemset(written_elems_, 0x00, simulations_ * sizeof(std::size_t));
     }
     SpikeTracker(SpikeTracker<F> const&) = delete;
     SpikeTracker(SpikeTracker<F>&&) = default;
@@ -187,7 +134,7 @@ class SpikeTracker {
         unsigned int const grid_blocks = div_ceil(simulations_, block_threads_);
         detail::spike_tracker::update_kernel<<<grid_blocks, block_threads_>>>(
             spike_times_, written_elems_, future.u(), past.u(), future.time(), threshold_,
-            simulations_);
+            max_written_elems_, simulations_);
     }
     std::size_t total_spikes() const {
         std::size_t result;
