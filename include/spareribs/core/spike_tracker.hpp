@@ -25,17 +25,10 @@ __global__ void update_kernel(F* spike_times, std::size_t* written_elems, F cons
                               std::size_t max_written_elems, std::size_t simulations) {
     assert(threadIdx.y == 0 and threadIdx.z == 0);
     unsigned int const g_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (g_idx == 0) {
-        /* printf("entering kernel\n");
-        printf("u_future[0]: %+f\tu_past[0]: %+f\tu_future[1]: %+f\tu_past[1]: %+f\tcurrent_time: "
-               "%f\tthreshold: %f\n",
-               u_future[0], u_past[0], u_future[1], u_past[1], current_time, threshold); */
-    }
     if (g_idx < simulations) {
         if (u_future[g_idx] > threshold and u_past[g_idx] < threshold) {
             std::size_t const spikes_current_sim = written_elems[g_idx];
-            /* printf("updating sim. of index %u\tprevious spikes: %u\n", g_idx,
-                   static_cast<unsigned int>(spikes_current_sim)); */
+            assert(spikes_current_sim + 1 <= max_written_elems);
             ptr_at(spike_times, g_idx, spikes_current_sim, max_written_elems) = current_time;
             ++written_elems[g_idx];
         }
