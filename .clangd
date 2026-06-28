@@ -5,5 +5,5 @@ CompileFlags:
     --language=cuda,
     --std=c++20,
     --include-directory=include/,
-  --include-directory=build/_deps/doctest-src/
+    --include-directory=build/_deps/doctest-src/
   ]
