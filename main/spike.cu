@@ -75,7 +75,6 @@ int main() {
             std::vector<float_type> spike_times(spikes_each_sim[i]);
             cudaMemcpy(spike_times.data(), spike_tr.spike_times_single_sim(i),
                        spike_times.size() * sizeof(float_type), cudaMemcpyDeviceToHost);
-            ofs << spike_times.front() << '\n';
             for (auto it = spike_times.cbegin() + 1, last_written_it = spike_times.cbegin();
                  it != spike_times.cend(); ++it) {
                 if (*it - *last_written_it > min_spike_delay) {
