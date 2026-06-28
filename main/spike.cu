@@ -15,11 +15,11 @@ int main() {
     using namespace spareribs;
     using float_type = float;
 
-    constexpr std::size_t simulations = 2, generator_seed = 0;
-    constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000000;
-    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.01f, step_size = 0.1f,
-                         spike_threshold = 0.f, min_spike_delay = 0.f;
-    constexpr float_type target_avg_spikes = 1000;
+    constexpr std::size_t simulations = 1 << 12, generator_seed = 0;
+    constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000;
+    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.02f, step_size = 0.1f,
+                         spike_threshold = 0.f, min_spike_delay = 150.f;
+    constexpr float_type target_avg_spikes = 100;
     constexpr std::string_view outDirName = "spike_intervals";
 
     SimulationPack<float_type> sim_pack1(simulations), sim_pack2(simulations);
@@ -41,7 +41,6 @@ int main() {
     evolution_map::RibsComposition evolution_map(ind_em, gj_em);
     SpikeTracker<float_type> spike_tr(sim_pack1.len(), target_avg_spikes, spike_threshold,
                                       block_threads);
-
     for (unsigned int steps = 0;; ++steps) {
         SimulationPack<float_type> const& past = steps % 2 == 0 ? sim_pack1 : sim_pack2;
         SimulationPack<float_type>& future = steps % 2 == 0 ? sim_pack2 : sim_pack1;

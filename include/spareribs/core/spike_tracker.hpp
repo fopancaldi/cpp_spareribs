@@ -72,7 +72,7 @@ T* reduce(T const* values, std::size_t length, unsigned int block_threads) {
     std::size_t current_length = length;
     while (current_length > 1) {
         T* reduced_values = nullptr;
-        std::size_t const reduced_length = div_ceil(length, block_threads);
+        std::size_t const reduced_length = div_ceil(current_length, block_threads);
         cudaMalloc(&reduced_values, reduced_length * sizeof(T));
         T const* kernel_in = current_length < length ? current_values : values;
         reduce_iter_kernel<<<reduced_length, block_threads, block_threads * sizeof(T)>>>(
