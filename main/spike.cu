@@ -1,6 +1,5 @@
 #include "spareribs/spareribs.hpp"
 
-#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -8,8 +7,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <iterator>
-#include <ranges>
 #include <string_view>
 #include <vector>
 
@@ -67,26 +64,23 @@ int main() {
     fs::path const outDirPath = fs::current_path() / outDirName;
     fs::remove_all(outDirPath);
     fs::create_directory(outDirPath);
-    std::vector<std::ofstream> ofstreams{};
-    std::ranges::transform(std::views::iota(std::size_t{0}, simulations),
-                           std::back_inserter(ofstreams), [outDirPath](std::size_t i) {
-                               std::ofstream r(outDirPath / (std::to_string(i) + ".csv"));
-                               r << std::scientific << std::setprecision(10);
-                               return r;
-                           });
+
     std::vector<std::size_t> spikes_each_sim(simulations);
     cudaMemcpy(spikes_each_sim.data(), spike_tr.written_elems(), simulations * sizeof(std::size_t),
                cudaMemcpyDeviceToHost);
     for (unsigned int i = 0; i < spikes_each_sim.size(); ++i) {
+        std::ofstream ofs(outDirPath / (std::to_string(i) + ".csv"));
+        ofs << std::scientific << std::setprecision(10);
+
         if (spikes_each_sim[i] > 0) {
             std::vector<float_type> spike_times(spikes_each_sim[i]);
             cudaMemcpy(spike_times.data(), spike_tr.spike_times_single_sim(i),
                        spike_times.size() * sizeof(float_type), cudaMemcpyDeviceToHost);
-            ofstreams[i] << spike_times.front() << '\n';
+            ofs << spike_times.front() << '\n';
             for (auto it = spike_times.cbegin() + 1, last_written_it = spike_times.cbegin();
                  it != spike_times.cend(); ++it) {
                 if (*it - *last_written_it > min_spike_delay) {
-                    ofstreams[i] << *it - *last_written_it << '\n';
+                    ofs << *it - *last_written_it << '\n';
                     last_written_it = it;
                 }
             }
