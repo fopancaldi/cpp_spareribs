@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spareribs/core/concepts.hpp"
 #include "spareribs/internal/vec2.hpp"
 
 #include <cassert>
@@ -7,6 +8,8 @@
 #include <type_traits>
 
 namespace spareribs {
+
+namespace model {
 
 template <std::floating_point F>
 struct FhnNeuron {
@@ -28,19 +31,26 @@ struct HarmonicOscillator {
     }
 };
 
-template <typename TFunction, std::floating_point F>
-    requires std::is_invocable_r_v<Vec2<F>, TFunction, Vec2<F>>
-class Rk4EvMap {
-    TFunction function_;
+} // namespace model
+
+namespace integrator {
+
+template <typename TModel>
+class RungeKutta4 {
+    TModel model_;
 
   public:
-    Rk4EvMap(TFunction function, F) : function_{function} {}
+    RungeKutta4(TModel model) : model_{model} {}
+
+    template <concepts::gpu_float F>
+        requires std::is_invocable_r_v<Vec2<F>, TModel, Vec2<F>>
     __host__ __device__ Vec2<F> operator()(Vec2<F> y, F h) const {
-        const Vec2<F> k1 = function_(y), k2 = function_(y + k1 * h / F{2}),
-                      k3 = function_(y + k2 * h / F{2}), k4 = function_(y + k3 * h);
+        const Vec2<F> k1 = model_(y), k2 = model_(y + k1 * h / F{2}),
+                      k3 = model_(y + k2 * h / F{2}), k4 = model_(y + k3 * h);
         return y + (k1 + F{2} * k2 + F{2} * k3 + k4) * h / F{6};
     }
-    TFunction& function() { return function_; }
 };
+
+} // namespace integrator
 
 } // namespace spareribs

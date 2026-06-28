@@ -4,6 +4,7 @@
 #include "spareribs/internal/div_ceil.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstdio>
@@ -107,8 +108,8 @@ class SpikeTracker {
     SpikeTracker(std::size_t simulations, F expected_avg_spikes_, F threshold,
                  unsigned int block_threads)
         : spike_times_{nullptr}, written_elems_{nullptr},
-          max_written_elems_{std::size_t{10} * expected_avg_spikes_}, simulations_{simulations},
-          threshold_{threshold}, block_threads_{block_threads} {
+          max_written_elems_{static_cast<std::size_t>(std::round(F{10} * expected_avg_spikes_))},
+          simulations_{simulations}, threshold_{threshold}, block_threads_{block_threads} {
         cudaMalloc(&spike_times_, simulations_ * max_written_elems_ * sizeof(F));
         cudaMalloc(&written_elems_, simulations_ * sizeof(std::size_t));
         cudaMemset(written_elems_, 0x00, simulations_ * sizeof(std::size_t));

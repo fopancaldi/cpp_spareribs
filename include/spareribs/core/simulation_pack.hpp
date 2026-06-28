@@ -1,12 +1,13 @@
 #pragma once
 
-#include <concepts>
+#include "spareribs/core/concepts.hpp"
+
 #include <cstddef>
 #include <utility>
 
 namespace spareribs {
 
-template <std::floating_point F>
+template <concepts::gpu_float F>
 class SimulationPack {
     F* u_;
     F* v_;
@@ -16,8 +17,8 @@ class SimulationPack {
   public:
     SimulationPack() : u_{nullptr}, v_{nullptr}, len_{0}, time_{0} {}
     SimulationPack(std::size_t len) : u_{nullptr}, v_{nullptr}, len_{len}, time_{0} {
-        cudaMalloc(&u_, len * sizeof(F));
-        cudaMalloc(&v_, len * sizeof(F));
+        cudaMalloc(&u_, len_ * sizeof(F));
+        cudaMalloc(&v_, len_ * sizeof(F));
     }
     SimulationPack(SimulationPack<F> const& other) : SimulationPack(other.len_) {
         cudaMemcpy(u_, other.u_, len_ * sizeof(F), cudaMemcpyDeviceToDevice);
@@ -34,8 +35,8 @@ class SimulationPack {
         if (this != &other) {
             SimulationPack tmp(other);
             swap(*this, tmp);
-            return *this;
         }
+        return *this;
     }
     SimulationPack& operator=(SimulationPack&& other) {
         if (this != &other) {

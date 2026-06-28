@@ -36,13 +36,13 @@ int main() {
                cudaMemcpyHostToDevice);
 
     OrbitTracker<float_type> orbit_tr(sim_pack.len(), total_steps);
-    Rk4EvMap rk4_em(FhnNeuron{epsilon, a}, float_type{});
-    IndependentEvMap ind_em(rk4_em, block_threads, float_type{});
-    GaussianJumpEvMap gj_em(T, sim_pack.len(), generator_seed, block_threads);
-    RibsCompositionEvMap evolution_map(ind_em, gj_em, float_type{});
+    integrator::RungeKutta4 rk4_int(model::FhnNeuron{epsilon, a});
+    evolution_map::Independent ind_em(rk4_int, block_threads);
+    evolution_map::GaussianJump gj_em(T, sim_pack.len(), generator_seed, block_threads);
+    evolution_map::RibsComposition evolution_map(ind_em, gj_em);
 
     for (unsigned int steps = 0; steps < total_steps; ++steps) {
-        evolution_map.evolve_in_place(sim_pack.u(), sim_pack.v(), step_size, sim_pack.len());
+        evolution_map.evolve_in_place(sim_pack, step_size);
         orbit_tr.fill_new(sim_pack);
         if (20 * steps % total_steps == 0) {
             std::cout << "steps / total_steps: " << steps << " / " << total_steps << '\n';
@@ -69,10 +69,5 @@ int main() {
     }
 
     cudaDeviceSynchronize();
-    cudaError_t const e = cudaGetLastError();
-    if (e == cudaSuccess) {
-        std::cout << "No error\n";
-    } else {
-        std::cout << "Got error: " << cudaGetErrorString(e) << '\n';
-    }
+    assert(cudaGetLastError() == cudaSuccess);
 }

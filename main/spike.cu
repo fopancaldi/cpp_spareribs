@@ -38,18 +38,17 @@ int main() {
     sim_pack1.time() = 0.f;
     sim_pack2.time() = 0.f;
 
-    Rk4EvMap rk4_em(FhnNeuron{epsilon, a}, float_type{});
-    IndependentEvMap ind_em(rk4_em, block_threads, float_type{});
-    GaussianJumpEvMap gj_em(T, sim_pack1.len(), generator_seed, block_threads);
-    RibsCompositionEvMap evolution_map(ind_em, gj_em, float_type{});
+    integrator::RungeKutta4 rk4_int(model::FhnNeuron{epsilon, a});
+    evolution_map::Independent ind_em(rk4_int, block_threads);
+    evolution_map::GaussianJump gj_em(T, sim_pack1.len(), generator_seed, block_threads);
+    evolution_map::RibsComposition evolution_map(ind_em, gj_em);
     SpikeTracker<float_type> spike_tr(sim_pack1.len(), target_avg_spikes, spike_threshold,
                                       block_threads);
 
     for (unsigned int steps = 0;; ++steps) {
         SimulationPack<float_type> const& past = steps % 2 == 0 ? sim_pack1 : sim_pack2;
         SimulationPack<float_type>& future = steps % 2 == 0 ? sim_pack2 : sim_pack1;
-        evolution_map.evolve_out_of_place(past.u(), past.v(), future.u(), future.v(), step_size,
-                                          sim_pack1.len());
+        evolution_map.evolve_out_of_place(future, past, step_size);
         future.time() = steps * step_size;
         spike_tr.update(future, past);
 
@@ -95,10 +94,5 @@ int main() {
     }
 
     cudaDeviceSynchronize();
-    cudaError_t const e = cudaGetLastError();
-    if (e == cudaSuccess) {
-        std::cout << "No error\n";
-    } else {
-        std::cout << "Got error: " << cudaGetErrorString(e) << '\n';
-    }
+    assert(cudaGetLastError() == cudaSuccess);
 }
