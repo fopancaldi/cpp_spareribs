@@ -15,7 +15,7 @@ int main() {
     using namespace spareribs;
     using float_type = float;
 
-    constexpr std::size_t simulations = 1 << 19, generator_seed = 0;
+    constexpr std::size_t simulations = 1 << 5, generator_seed = 0;
     constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000;
     constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.005f, step_size = 0.1f,
                          spike_threshold = 0.f, min_spike_delay = 0.f;
@@ -72,9 +72,10 @@ int main() {
     std::vector<std::size_t> spikes_each_sim(simulations);
     cudaMemcpy(spikes_each_sim.data(), spike_tr.written_elems(), simulations * sizeof(std::size_t),
                cudaMemcpyDeviceToHost);
+
+        std::ofstream ofs(outDirPath / ("spike_intervals.csv"));
     for (unsigned int i = 0; i < spikes_each_sim.size(); ++i) {
         if (spikes_each_sim[i] > 0) {
-            std::ofstream ofs(outDirPath / (std::to_string(i) + ".csv"));
             ofs << std::scientific << std::setprecision(10);
             std::vector<float_type> spike_times(spikes_each_sim[i]);
             cudaMemcpy(spike_times.data(), spike_tr.spike_times_single_sim(i),
