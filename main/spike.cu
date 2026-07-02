@@ -15,18 +15,23 @@ int main() {
     using namespace spareribs;
     using float_type = float;
 
-    constexpr std::size_t simulations = 1 << 12, generator_seed = 0;
+    constexpr std::size_t simulations = 1 << 19, generator_seed = 0;
     constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000;
-    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.02f, step_size = 0.1f,
-                         spike_threshold = 0.f, min_spike_delay = 150.f;
-    constexpr float_type target_avg_spikes = 100;
+    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.005f, step_size = 0.1f,
+                         spike_threshold = 0.f, min_spike_delay = 0.f;
+    constexpr float_type target_avg_spikes = 1.;
     constexpr std::string_view outDirName = "spike_intervals";
+
+    std::cout<<"Simulating "<<simulations
+	     <<" neurons until "<<simulations*target_avg_spikes<<" are collected.\n";
 
     SimulationPack<float_type> sim_pack1(simulations), sim_pack2(simulations);
     curandGenerator_t u_generator;
     curandCreateGenerator(&u_generator, CURAND_RNG_PSEUDO_DEFAULT);
     curandSetPseudoRandomGeneratorSeed(u_generator, generator_seed);
-    constexpr float_type u_0 = -a, v_0 = a * a * a / float_type{3} - a;
+//    constexpr float_type u_0 = -a, v_0 = a * a * a / float_type{3} - a;
+    const float_type u_0 = 0.5 * a + std::sqrt(3) * std::sqrt(1-a*a/4),
+	             v_0 = a * a * a / float_type{3} - a;
     generate_normal(u_generator, sim_pack1.u(), sim_pack1.len(), u_0,
                     T / std::sqrt(a * a - float_type{1}));
     const std::vector v_0_vec(sim_pack1.len(), v_0);
@@ -74,6 +79,7 @@ int main() {
             std::vector<float_type> spike_times(spikes_each_sim[i]);
             cudaMemcpy(spike_times.data(), spike_tr.spike_times_single_sim(i),
                        spike_times.size() * sizeof(float_type), cudaMemcpyDeviceToHost);
+	    ofs << spike_times[0]<<'\n';
             for (auto it = spike_times.cbegin() + 1, last_written_it = spike_times.cbegin();
                  it != spike_times.cend(); ++it) {
                 if (*it - *last_written_it > min_spike_delay) {
