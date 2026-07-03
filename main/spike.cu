@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 
+#include<unistd.h>
+
 int main() {
     namespace fs = std::filesystem;
     using namespace spareribs;
@@ -66,14 +68,22 @@ int main() {
     }
 
     fs::path const outDirPath = fs::current_path() / outDirName;
-    fs::remove_all(outDirPath);
+    //fs::remove_all(outDirPath);
     fs::create_directory(outDirPath);
 
     std::vector<std::size_t> spikes_each_sim(simulations);
-    cudaMemcpy(spikes_each_sim.data(), spike_tr.written_elems(), simulations * sizeof(std::size_t),
+    cudaMemcpy(spikes_each_sim.data(), spike_tr.written_elems(), 
+	       simulations * sizeof(std::size_t),
                cudaMemcpyDeviceToHost);
 
-        std::ofstream ofs(outDirPath / ("spike_intervals.csv"));
+    std::ostringstream filenamess;
+    pid_t pid = getpid();
+    filenamess<<pid<<"_"<<std::scientific<<std::setprecision(3)
+	      <<a<<"_"<<epsilon<<"_"<<T<<"_"
+	      <<simulations<<"_"<<target_avg_spikes<<".csv";
+
+    std::ofstream ofs(outDirPath / filenamess.str());
+
     for (unsigned int i = 0; i < spikes_each_sim.size(); ++i) {
         if (spikes_each_sim[i] > 0) {
             ofs << std::scientific << std::setprecision(10);
