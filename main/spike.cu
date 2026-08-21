@@ -15,13 +15,14 @@
 int main() {
     namespace fs = std::filesystem;
     using namespace spareribs;
-    using float_type = float;
+    using float_type = double;
 
-    constexpr std::size_t simulations = 1 << 5, generator_seed = 0;
+    constexpr std::size_t simulations = 1 << 21, generator_seed = 0;
     constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000;
-    constexpr float_type a = 1.3f, epsilon = 0.01f, T = 0.005f, step_size = 0.1f,
-                         spike_threshold = 0.f, min_spike_delay = 0.f;
-    constexpr float_type target_avg_spikes = 1.;
+    constexpr float_type a = 1.3f, epsilon = 0.001f, T = 0.01f, 
+	      step_size = 0.1f, spike_threshold = 0.f, 
+	      min_spike_delay = 0.f;
+    constexpr float_type target_avg_spikes = 5.;
     constexpr std::string_view outDirName = "spike_intervals";
 
     std::cout<<"Simulating "<<simulations
