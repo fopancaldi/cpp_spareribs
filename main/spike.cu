@@ -15,13 +15,13 @@
 int main() {
     namespace fs = std::filesystem;
     using namespace spareribs;
-    using float_type = double;
+    using float_type = float;
 
     constexpr std::size_t simulations = 1 << 21, generator_seed = 0;
-    constexpr unsigned int block_threads = 1 << 10, steps_until_check = 10000;
+    constexpr unsigned int block_threads = 1 << 10, steps_until_check = 1000;
     constexpr float_type a = 1.3f, epsilon = 0.001f, T = 0.01f, 
 	      step_size = 0.1f, spike_threshold = 0.f, 
-	      min_spike_delay = 0.f;
+	      min_spike_delay = 2.5f/epsilon;
     constexpr float_type target_avg_spikes = 5.;
     constexpr std::string_view outDirName = "spike_intervals";
 
@@ -69,7 +69,6 @@ int main() {
     }
 
     fs::path const outDirPath = fs::current_path() / outDirName;
-    //fs::remove_all(outDirPath);
     fs::create_directory(outDirPath);
 
     std::vector<std::size_t> spikes_each_sim(simulations);
@@ -88,10 +87,10 @@ int main() {
     for (unsigned int i = 0; i < spikes_each_sim.size(); ++i) {
         if (spikes_each_sim[i] > 0) {
             ofs << std::scientific << std::setprecision(10);
-            std::vector<float_type> spike_times(spikes_each_sim[i]);
-            cudaMemcpy(spike_times.data(), spike_tr.spike_times_single_sim(i),
-                       spike_times.size() * sizeof(float_type), cudaMemcpyDeviceToHost);
-	    ofs << spike_times[0]<<'\n';
+            std::vector<float_type> spike_times(spikes_each_sim[i]+1);
+	    spike_times[0] = 0.f;
+            cudaMemcpy(spike_times.data()+1, spike_tr.spike_times_single_sim(i),
+                       (spike_times.size() - 1) * sizeof(float_type), cudaMemcpyDeviceToHost);
             for (auto it = spike_times.cbegin() + 1, last_written_it = spike_times.cbegin();
                  it != spike_times.cend(); ++it) {
                 if (*it - *last_written_it > min_spike_delay) {
